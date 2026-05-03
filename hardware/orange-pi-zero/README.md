@@ -85,10 +85,11 @@ make build_image_orangepi       # build the cross-compile Docker image (once)
 make build_dev_orangepi         # produce bin/orange_kvm_app
 ```
 
-The resulting `bin/orange_kvm_app` is a statically-linked ARMv7 binary.
-The `orangepi` build tag swaps out the Rockchip CGO layer for no-op stubs;
-the only remaining CGO dependency is `gspt` (process-title setter), which
-links against standard libc and needs no Rockchip-specific libraries.
+The resulting `bin/orange_kvm_app` statically links the Go net package (via
+`netgo`). The `orangepi` build tag swaps out the Rockchip CGO native layer
+(libjknative / LVGL) for no-op stubs — no Rockchip libraries are linked.
+CGO remains enabled only for `gspt` (process-title setter), which links
+against standard libc from the `arm-linux-gnueabihf` sysroot.
 
 ---
 

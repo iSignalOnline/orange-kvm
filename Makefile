@@ -65,9 +65,11 @@ ORANGE_PI_SKU := orange-kvm-zero
 
 OPI_GO_BUILD_ARGS := -tags netgo,timetzdata,nomsgpack,orangepi
 OPI_GO_RELEASE_BUILD_ARGS := -trimpath $(OPI_GO_BUILD_ARGS)
-# CGO_ENABLED=1 so that packages using standard libc CGO (e.g. gspt) can
-# compile. The Rockchip-specific CGO layer is excluded via the `orangepi`
-# build tag. CC must point to the arm-linux-gnueabihf cross-compiler.
+# CGO_ENABLED=1 so that packages using standard libc CGO (e.g. gspt for
+# process-title setting) can compile. The Rockchip-specific native layer is
+# excluded via the `orangepi` build tag — no Rockchip libraries are linked.
+# `netgo` is still required to statically link the Go net package (DNS
+# resolver) even when CGO is on, matching the JetKVM production build style.
 OPI_CC ?= arm-linux-gnueabihf-gcc
 OPI_GO_ARGS := GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=$(OPI_CC)
 OPI_GO_CMD := $(OPI_GO_ARGS) go
