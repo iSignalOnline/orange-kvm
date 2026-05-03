@@ -2,7 +2,6 @@ package kvm
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,21 +10,12 @@ import (
 
 	"github.com/jetkvm/kvm/internal/ota"
 
-	"github.com/erikdubbelboer/gspt"
 	"github.com/gwatts/rootcerts"
 	"github.com/rs/zerolog"
 )
 
 var appCtx context.Context
 var procPrefix string = "jetkvm: [app]"
-
-func setProcTitle(status string) {
-	if status != "" {
-		status = " " + status
-	}
-	title := fmt.Sprintf("%s%s", procPrefix, status)
-	gspt.SetProcTitle(title)
-}
 
 func Main() {
 	setProcTitle("starting")
