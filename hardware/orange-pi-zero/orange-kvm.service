@@ -1,0 +1,15 @@
+[Unit]
+Description=Orange KVM application
+Documentation=https://github.com/iSignalOnline/orange-kvm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/orange_kvm_app
+Restart=on-failure
+RestartSec=5
+Environment=JETKVM_NATIVE_DISABLE=1
+
+[Install]
+WantedBy=multi-user.target

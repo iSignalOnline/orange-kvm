@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+# Build image for Orange Pi Zero targets (Allwinner H2+/H3/H5, ARMv7).
+# Unlike Dockerfile.build (which uses the Rockchip buildkit toolchain and
+# requires libjknative), this image uses the standard Debian
+# gcc-arm-linux-gnueabihf cross-compiler. The `orangepi` build tag activates
+# CGO-free stubs for the Rockchip native layer so the binary needs only
+# standard libc — no Rockchip-specific shared libraries required.
+FROM --platform=${BUILDPLATFORM} golang:1.25.1-trixie AS builder
+
+ENV GOTOOLCHAIN=local
+ENV GOPATH=/go
+ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+
+COPY install-deps-orangepi.sh /install-deps-orangepi.sh
+RUN /install-deps-orangepi.sh
+
+# Create build directory
+RUN mkdir -p /build/
+
+# Copy go.mod and go.sum
+COPY go.mod go.sum /build/
+
+WORKDIR /build
+
+RUN go mod download && go mod verify
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT [ "/entrypoint.sh" ]

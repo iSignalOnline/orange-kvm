@@ -55,6 +55,23 @@ endif
 
 GO_CMD := $(GO_ARGS) go
 
+# ---------------------------------------------------------------------------
+# Orange Pi Zero build configuration (Allwinner H2+/H3/H5, ARMv7 hard-float)
+# Builds without CGO (no Rockchip-specific native library required).
+# The `orangepi` build tag activates no-op stubs for the Rockchip CGO layer.
+# ---------------------------------------------------------------------------
+ORANGE_PI_BUILD_TAG ?= orange-kvm-build:latest
+ORANGE_PI_SKU := orange-kvm-zero
+
+OPI_GO_BUILD_ARGS := -tags netgo,timetzdata,nomsgpack,orangepi
+OPI_GO_RELEASE_BUILD_ARGS := -trimpath $(OPI_GO_BUILD_ARGS)
+# CGO_ENABLED=1 so that packages using standard libc CGO (e.g. gspt) can
+# compile. The Rockchip-specific CGO layer is excluded via the `orangepi`
+# build tag. CC must point to the arm-linux-gnueabihf cross-compiler.
+OPI_CC ?= arm-linux-gnueabihf-gcc
+OPI_GO_ARGS := GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=$(OPI_CC)
+OPI_GO_CMD := $(OPI_GO_ARGS) go
+
 BIN_DIR := $(shell pwd)/bin
 
 TEST_DIRS := $(shell find . -name "*_test.go" -type f -exec dirname {} \; | sort -u)
@@ -184,7 +201,7 @@ _build_dev_inner: build_native
 	$(GO_CMD) build \
 		-ldflags="$(GO_LDFLAGS) -X $(KVM_PKG_NAME).builtAppVersion=$(VERSION_DEV)" \
 		$(GO_RELEASE_BUILD_ARGS) \
-		-o $(BIN_DIR)/jetkvm_app -v cmd/main.go
+		-o $(BIN_DIR)/jetkvm_app -v ./cmd/
 
 build_test2json:
 	$(GO_CMD) build -o $(BIN_DIR)/test2json cmd/test2json
@@ -335,7 +352,60 @@ _build_release_inner: build_native
 	$(GO_CMD) build \
 		-ldflags="$(GO_LDFLAGS) -X $(KVM_PKG_NAME).builtAppVersion=$(VERSION)" \
 		$(GO_RELEASE_BUILD_ARGS) \
-		-o $(BIN_DIR)/jetkvm_app cmd/main.go
+		-o $(BIN_DIR)/jetkvm_app ./cmd/
+
+# ---------------------------------------------------------------------------
+# Orange Pi Zero build targets
+# ---------------------------------------------------------------------------
+
+# Build the Orange Pi dev binary. Runs in Docker if ORANGE_PI_BUILD_TAG image
+# is available; otherwise builds directly on the host (requires Go).
+build_dev_orangepi:
+	@echo "Building Orange Pi Zero dev binary (CGO_ENABLED=0, tag=orangepi)..."
+	docker run --rm \
+		-v "$$(pwd):/build" \
+		-v go-mod-cache-opi:/root/go/pkg/mod \
+		-v go-build-cache-opi:/root/.cache/go-build \
+		$(ORANGE_PI_BUILD_TAG) make _build_dev_orangepi_inner VERSION_DEV=$(VERSION_DEV) \
+	|| $(MAKE) _build_dev_orangepi_inner VERSION_DEV=$(VERSION_DEV)
+
+_build_dev_orangepi_inner:
+	@echo "Building Orange Pi Zero... $(VERSION_DEV)"
+	$(OPI_GO_CMD) build \
+		-ldflags="$(GO_LDFLAGS) -X $(KVM_PKG_NAME).builtAppVersion=$(VERSION_DEV)" \
+		$(OPI_GO_RELEASE_BUILD_ARGS) \
+		-o $(BIN_DIR)/orange_kvm_app -v ./cmd/
+
+# Build the Orange Pi release binary.
+build_release_orangepi:
+	@echo "Building Orange Pi Zero release binary (CGO_ENABLED=0, tag=orangepi)..."
+	docker run --rm \
+		-v "$$(pwd):/build" \
+		-v go-mod-cache-opi:/root/go/pkg/mod \
+		-v go-build-cache-opi:/root/.cache/go-build \
+		$(ORANGE_PI_BUILD_TAG) make _build_release_orangepi_inner VERSION=$(VERSION) \
+	|| $(MAKE) _build_release_orangepi_inner VERSION=$(VERSION)
+
+_build_release_orangepi_inner:
+	@echo "Building Orange Pi Zero release... $(VERSION)"
+	$(OPI_GO_CMD) build \
+		-ldflags="$(GO_LDFLAGS) -X $(KVM_PKG_NAME).builtAppVersion=$(VERSION)" \
+		$(OPI_GO_RELEASE_BUILD_ARGS) \
+		-o $(BIN_DIR)/orange_kvm_app ./cmd/
+
+# Build the Docker image used for Orange Pi Zero cross-compilation.
+# Assembles a temporary build context (mirrors prepare_docker_build_context
+# in scripts/build_utils.sh) and builds Dockerfile.build.orangepi.
+build_image_orangepi:
+	$(eval OPI_CTX := $(shell mktemp -d))
+	cp scripts/install-deps-orangepi.sh go.mod go.sum Dockerfile.build.orangepi $(OPI_CTX)/
+	printf '#!/bin/bash\ngit config --global --add safe.directory /build\nexec $$@\n' > $(OPI_CTX)/entrypoint.sh
+	chmod +x $(OPI_CTX)/entrypoint.sh
+	docker build --build-arg BUILDPLATFORM=linux/amd64 \
+		-t $(ORANGE_PI_BUILD_TAG) \
+		-f $(OPI_CTX)/Dockerfile.build.orangepi \
+		$(OPI_CTX)
+	rm -rf $(OPI_CTX)
 
 release: git_check_dev check_r2
 	@if [ -z "$(SIGNING_KEY_FPR)" ]; then \

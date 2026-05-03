@@ -1,3 +1,5 @@
+//go:build linux && !orangepi
+
 package native
 
 import (
